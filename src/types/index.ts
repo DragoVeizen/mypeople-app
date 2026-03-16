@@ -27,7 +27,7 @@ export interface User {
 export interface Household {
   id: string;
   name: string;
-  code: string;
+  inviteCode: string;
   members: string[];
   createdBy: string;
   createdAt: number;

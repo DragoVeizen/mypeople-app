@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, useColorScheme, Pressable, TextInput } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme, Pressable, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { signIn } from '../../src/services/auth';
 
 export default function LoginScreen() {
   const colorScheme = useColorScheme();
@@ -13,10 +14,38 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = () => {
-    // TODO: Implement Firebase auth
-    router.replace('/(tabs)');
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Please enter both email and password');
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await signIn(email.trim(), password);
+      // Navigation is handled by the auth state listener in _layout.tsx
+    } catch (err: any) {
+      console.error('Login error:', err);
+      // Handle specific Firebase errors
+      if (err.code === 'auth/user-not-found') {
+        setError('No account found with this email');
+      } else if (err.code === 'auth/wrong-password') {
+        setError('Incorrect password');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Invalid email address');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please try again later');
+      } else {
+        setError('Failed to sign in. Please try again');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -32,6 +61,14 @@ export default function LoginScreen() {
 
       {/* Login Form */}
       <View style={styles.formSection}>
+        {/* Error Message */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="alert-circle" size={20} color={Colors.status.error} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         {/* Email Field */}
         <View style={styles.inputGroup}>
           <Text style={[styles.label, { color: colors.text }]}>Email</Text>
@@ -42,9 +79,14 @@ export default function LoginScreen() {
               placeholder="hello@mypeople.com"
               placeholderTextColor={colors.textSecondary}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError(null);
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              editable={!isLoading}
             />
           </View>
         </View>
@@ -59,8 +101,13 @@ export default function LoginScreen() {
               placeholder="••••••••"
               placeholderTextColor={colors.textSecondary}
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                setError(null);
+              }}
               secureTextEntry={!showPassword}
+              autoComplete="password"
+              editable={!isLoading}
             />
             <Pressable onPress={() => setShowPassword(!showPassword)}>
               <Ionicons
@@ -78,8 +125,16 @@ export default function LoginScreen() {
         </Pressable>
 
         {/* Sign In Button */}
-        <Pressable style={[styles.primaryButton, { backgroundColor: Colors.primary }]} onPress={handleLogin}>
-          <Text style={styles.primaryButtonText}>Sign In</Text>
+        <Pressable
+          style={[styles.primaryButton, { backgroundColor: Colors.primary, opacity: isLoading ? 0.7 : 1 }]}
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Sign In</Text>
+          )}
         </Pressable>
 
         {/* Divider */}
@@ -89,13 +144,19 @@ export default function LoginScreen() {
           <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
         </View>
 
-        {/* Social Login */}
+        {/* Social Login - Placeholder for now */}
         <View style={styles.socialButtons}>
-          <Pressable style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Pressable
+            style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => Alert.alert('Coming Soon', 'Google sign-in will be available soon!')}
+          >
             <Ionicons name="logo-google" size={20} color={colors.text} />
             <Text style={[styles.socialButtonText, { color: colors.text }]}>Google</Text>
           </Pressable>
-          <Pressable style={[styles.socialButton, styles.appleButton]}>
+          <Pressable
+            style={[styles.socialButton, styles.appleButton]}
+            onPress={() => Alert.alert('Coming Soon', 'Apple sign-in will be available soon!')}
+          >
             <Ionicons name="logo-apple" size={20} color="#fff" />
             <Text style={[styles.socialButtonText, { color: '#fff' }]}>Apple</Text>
           </Pressable>
@@ -146,6 +207,21 @@ const styles = StyleSheet.create({
   formSection: {
     flex: 1,
     paddingHorizontal: Spacing.xxl,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.status.error + '15',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  errorText: {
+    flex: 1,
+    color: Colors.status.error,
+    fontSize: FontSize.sm,
+    fontFamily: 'PlusJakartaSans_500Medium',
   },
   inputGroup: {
     marginBottom: Spacing.lg,

@@ -1,9 +1,10 @@
-import { View, Text, StyleSheet, useColorScheme, Pressable, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, useColorScheme, Pressable, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, router } from 'expo-router';
+import { Link } from 'expo-router';
 import { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSize, BorderRadius } from '../../src/constants/theme';
+import { signUp } from '../../src/services/auth';
 
 export default function RegisterScreen() {
   const colorScheme = useColorScheme();
@@ -12,15 +13,51 @@ export default function RegisterScreen() {
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleRegister = () => {
-    // TODO: Implement Firebase auth
-    router.replace('/(tabs)');
+  const validateForm = (): string | null => {
+    if (!fullName.trim()) return 'Please enter your name';
+    if (!email.trim()) return 'Please enter your email';
+    if (!password) return 'Please enter a password';
+    if (password.length < 6) return 'Password must be at least 6 characters';
+    if (password !== confirmPassword) return 'Passwords do not match';
+    if (!agreedToTerms) return 'Please agree to the Terms of Service';
+    return null;
+  };
+
+  const handleRegister = async () => {
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      await signUp(email.trim(), password, fullName.trim());
+      // Navigation is handled by the auth state listener in _layout.tsx
+    } catch (err: any) {
+      console.error('Registration error:', err);
+      // Handle specific Firebase errors
+      if (err.code === 'auth/email-already-in-use') {
+        setError('An account with this email already exists');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Invalid email address');
+      } else if (err.code === 'auth/weak-password') {
+        setError('Password is too weak');
+      } else {
+        setError('Failed to create account. Please try again');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -50,6 +87,14 @@ export default function RegisterScreen() {
 
         {/* Form Fields */}
         <View style={styles.form}>
+          {/* Error Message */}
+          {error && (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={20} color={Colors.status.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
           {/* Full Name */}
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
@@ -60,7 +105,11 @@ export default function RegisterScreen() {
                 placeholder="John Doe"
                 placeholderTextColor={colors.textSecondary}
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  setError(null);
+                }}
+                editable={!isLoading}
               />
             </View>
           </View>
@@ -75,25 +124,14 @@ export default function RegisterScreen() {
                 placeholder="example@mypeople.app"
                 placeholderTextColor={colors.textSecondary}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setError(null);
+                }}
                 keyboardType="email-address"
                 autoCapitalize="none"
-              />
-            </View>
-          </View>
-
-          {/* Phone */}
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Phone Number</Text>
-            <View style={[styles.inputContainer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <Ionicons name="call-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                placeholder="+1 (555) 000-0000"
-                placeholderTextColor={colors.textSecondary}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
+                autoComplete="email"
+                editable={!isLoading}
               />
             </View>
           </View>
@@ -105,11 +143,16 @@ export default function RegisterScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text }]}
-                placeholder="••••••••"
+                placeholder="At least 6 characters"
                 placeholderTextColor={colors.textSecondary}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setError(null);
+                }}
                 secureTextEntry={!showPassword}
+                autoComplete="new-password"
+                editable={!isLoading}
               />
               <Pressable onPress={() => setShowPassword(!showPassword)}>
                 <Ionicons
@@ -128,17 +171,22 @@ export default function RegisterScreen() {
               <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, { color: colors.text }]}
-                placeholder="••••••••"
+                placeholder="Re-enter password"
                 placeholderTextColor={colors.textSecondary}
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setError(null);
+                }}
                 secureTextEntry
+                autoComplete="new-password"
+                editable={!isLoading}
               />
             </View>
           </View>
 
           {/* Terms Checkbox */}
-          <Pressable style={styles.termsRow} onPress={() => setAgreedToTerms(!agreedToTerms)}>
+          <Pressable style={styles.termsRow} onPress={() => setAgreedToTerms(!agreedToTerms)} disabled={isLoading}>
             <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked, { borderColor: agreedToTerms ? Colors.primary : colors.border }]}>
               {agreedToTerms && <Ionicons name="checkmark" size={16} color="#fff" />}
             </View>
@@ -152,11 +200,18 @@ export default function RegisterScreen() {
 
           {/* Create Account Button */}
           <Pressable
-            style={[styles.primaryButton, { backgroundColor: Colors.primary, opacity: agreedToTerms ? 1 : 0.5 }]}
+            style={[
+              styles.primaryButton,
+              { backgroundColor: Colors.primary, opacity: agreedToTerms && !isLoading ? 1 : 0.5 }
+            ]}
             onPress={handleRegister}
-            disabled={!agreedToTerms}
+            disabled={!agreedToTerms || isLoading}
           >
-            <Text style={styles.primaryButtonText}>Create Account</Text>
+            {isLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.primaryButtonText}>Create Account</Text>
+            )}
           </Pressable>
 
           {/* Divider */}
@@ -168,10 +223,16 @@ export default function RegisterScreen() {
 
           {/* Social Buttons */}
           <View style={styles.socialButtons}>
-            <Pressable style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable
+              style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => Alert.alert('Coming Soon', 'Google sign-up will be available soon!')}
+            >
               <Ionicons name="logo-google" size={24} color={colors.text} />
             </Pressable>
-            <Pressable style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Pressable
+              style={[styles.socialButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => Alert.alert('Coming Soon', 'Apple sign-up will be available soon!')}
+            >
               <Ionicons name="logo-apple" size={24} color={colors.text} />
             </Pressable>
           </View>
@@ -251,6 +312,21 @@ const styles = StyleSheet.create({
   },
   form: {
     paddingHorizontal: Spacing.xl,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.status.error + '15',
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  errorText: {
+    flex: 1,
+    color: Colors.status.error,
+    fontSize: FontSize.sm,
+    fontFamily: 'PlusJakartaSans_500Medium',
   },
   inputGroup: {
     marginBottom: Spacing.lg,
